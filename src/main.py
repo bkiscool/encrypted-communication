@@ -11,12 +11,14 @@ from Cryptodome.Hash import *
 import os
 from pathlib import Path
 import time
+from datetime import datetime, timedelta
 import socket
 import json
+import random
 
 def sender():
 
-    createKeys()
+    create_keys()
 
     print()
     print("Choose a test option:")
@@ -31,7 +33,7 @@ def sender():
     elif (option == "2"):
         test_rsa()
     elif (option == "3"):
-        print("TODO")
+        test_performance()
     else:
         print("TODO")
 
@@ -114,7 +116,7 @@ def test_aes():
         print("Error: AES-128 bit key does not exist.")
         print("Attempting to create a new key...")
 
-        createKeys()
+        create_keys()
         aes_128_file_path = Path("keys/aes-128")
 
     aes_128_key = ""
@@ -167,7 +169,7 @@ def test_rsa():
         print("Error: RSA-2048 bit key pair does not exist.")
         print("Attempting to create a new key pair...")
 
-        createKeys()
+        create_keys()
         rsa_2048_private_file_path = Path("keys/rsa-2048-private")
         rsa_2048_public_file_path = Path("keys/rsa-2048-public")
 
@@ -209,9 +211,118 @@ def test_rsa():
     print()
     print("The message was written to 'ctext'.")
 
+def test_performance():
+    print()
+    print("Enter a message to use for the test.")
     
+    message = input("=>")
+    message = message.encode()
 
-def createKeys():
+    print()
+    print("Starting test now...")
+
+    aes_tests = {
+        "16": [0, 0],
+        "24": [0, 0],
+        "32": [0, 0]
+    }
+
+    rsa_tests = {
+        "1024": [0, 0],
+        "2048": [0, 0],
+        "4096": [0, 0]
+    }
+
+    print()
+    print("Testing AES now.")
+
+    for size in aes_tests:
+        print()
+        print("Testing AES-" + size + "...")
+
+        padded_message = Padding.pad(message, int(size) * 8)
+        
+        for i in range(100):
+            key = get_random_bytes(int(size))
+            cipher_encrypt = AES.new(key, AES.MODE_CBC)
+            cipher_decrypt = AES.new(key, AES.MODE_CBC, iv = cipher_encrypt.iv)
+
+            encrypt_start_time = datetime.now()
+            ciphertext = cipher_encrypt.encrypt(padded_message)
+            encrypt_end_time = datetime.now()
+
+            decrypt_start_time = datetime.now()
+            cipher_decrypt.decrypt(ciphertext)
+            decrypt_end_time = datetime.now()
+
+            encrypt_time = encrypt_end_time - encrypt_start_time
+            decrypt_time = decrypt_end_time - decrypt_start_time
+
+            aes_averages = aes_tests[size]
+            aes_averages[0] += encrypt_time.microseconds
+            aes_averages[1] += decrypt_time.microseconds
+            aes_tests[size] = aes_averages
+
+        aes_averages = aes_tests[size]
+        aes_averages[0] /= 100
+        aes_averages[1] /= 100
+        aes_tests[size] = aes_averages
+
+        print("AES " + str(int(size) * 8) + "-bit average encryption: " + str(round(aes_averages[0] / 1000, 5)) + " ms")
+        print("AES " + str(int(size) * 8) + "-bit average decryption: " + str(round(aes_averages[1] / 1000, 5)) + " ms")
+
+    print()
+    print("Done")
+
+    print()
+    print("Testing RSA now.")
+
+    for size in rsa_tests:
+        print()
+        print("Testing RSA-" + size + "...")
+        
+        private_key = RSA.generate(int(size), e = 65537 + random.randint(0, 9999) * 2)
+        public_key = private_key.public_key()
+
+        encrypt_cipher = PKCS1_OAEP.new(public_key)
+        decrypt_cipher = PKCS1_OAEP.new(private_key)
+
+        for i in range(100):
+            encrypt_start_time = datetime.now()
+            ciphertext = encrypt_cipher.encrypt(message)
+            encrypt_end_time = datetime.now()
+
+            decrypt_start_time = datetime.now()
+            decrypt_cipher.decrypt(ciphertext)
+            decrypt_end_time = datetime.now()
+
+            encrypt_time = encrypt_end_time - encrypt_start_time
+            decrypt_time = decrypt_end_time - decrypt_start_time
+
+            rsa_averages = rsa_tests[size]
+            rsa_averages[0] += encrypt_time.microseconds
+            rsa_averages[1] += decrypt_time.microseconds
+            rsa_tests[size] = rsa_averages
+        
+        rsa_averages = rsa_tests[size]
+        rsa_averages[0] /= 100
+        rsa_averages[1] /= 100
+        rsa_tests[size] = rsa_averages
+
+        print("RSA " + size + "-bit average encryption: " + str(round(rsa_averages[0] / 1000, 5)) + " ms")
+        print("RSA " + size + "-bit average decryption: " + str(round(rsa_averages[1] / 1000, 5)) + " ms")
+    
+    print()
+    print("Done")
+
+
+
+            
+        
+
+
+
+def create_keys():
     aes_128_file_path = Path("keys/aes-128")
 
     if (not aes_128_file_path.exists()):
